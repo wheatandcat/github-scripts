@@ -1,6 +1,6 @@
-# 古いissueをクローズするスクリプト
+# 古いPullRequestをクローズするスクリプト
 
-作成してから6ヶ月以上経過しているOpen中のissueをCloseするスクリプト
+作成してから3ヶ月以上経過しているOpen中のPullRequestをCloseするスクリプト
 
 ## 準備
 
