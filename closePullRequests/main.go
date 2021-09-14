@@ -41,17 +41,15 @@ type ResposeType struct {
 
 // Repository Repositoryのタイプ
 type Repository struct {
-	ID     string      `json:"id"`
-	Issues IssuesNodes `json:"issues"`
+	ID           string           `json:"id"`
+	PullRequests PullRequestNodes `json:"pullRequests"`
 }
 
-// IssuesNodes IssuesNodesのタイプ
-type IssuesNodes struct {
-	Nodes []Issues `json:"nodes"`
+type PullRequestNodes struct {
+	Nodes []PullRequest `json:"nodes"`
 }
 
-// Issues Issuesのタイプ
-type Issues struct {
+type PullRequest struct {
 	ID        string     `json:"id"`
 	Title     string     `json:"title"`
 	URL       string     `json:"url"`
@@ -70,9 +68,9 @@ type Label struct {
 	Name string `json:"name"`
 }
 
-type UpdateIssueInput struct {
-	ID    string `json:"id"`
-	State string `json:"state"`
+type UpdatePullRequestInput struct {
+	PullRequestId string `json:"pullRequestId"`
+	State         string `json:"state"`
 }
 
 func include(s []string, e string) bool {
@@ -84,8 +82,8 @@ func include(s []string, e string) bool {
 	return false
 }
 
-// 180日
-const period = time.Hour * 24 * 30 * 6
+// 90日
+const period = time.Hour * 24 * 30 * 3
 
 func main() {
 	var config Config
@@ -94,15 +92,15 @@ func main() {
 		log.Fatal(err)
 	}
 
-	is, err := config.GitHub.getIssues()
+	is, err := config.GitHub.getPullRequests()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, i := range is {
-		input := UpdateIssueInput{
-			ID:    i.ID,
-			State: "CLOSED",
+		input := UpdatePullRequestInput{
+			PullRequestId: i.ID,
+			State:         "CLOSED",
 		}
 		if err := config.GitHub.closeIssue(input); err != nil {
 			fmt.Println("削除失敗:" + i.Title)
@@ -113,16 +111,17 @@ func main() {
 	}
 }
 
-func (c *GitHubConfig) getIssues() ([]Issues, error) {
+func (c *GitHubConfig) getPullRequests() ([]PullRequest, error) {
 	client := graphql.NewClient("https://api.github.com/graphql")
 	req := graphql.NewRequest(`
 query Repository($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
     id
-    issues(first: 100, states: [OPEN], orderBy: {field: CREATED_AT, direction: ASC}) {
+    pullRequests(first: 100, states: [OPEN], orderBy: {field: CREATED_AT, direction: ASC}) {
       nodes {
         id
         title
+        url
         createdAt
         labels(first: 20, orderBy: {field: CREATED_AT, direction: DESC}) {
           nodes {
@@ -144,14 +143,14 @@ query Repository($owner: String!, $name: String!) {
 
 	ctx := context.Background()
 
-	is := []Issues{}
+	prs := []PullRequest{}
 
 	var respData ResposeType
 	if err := client.Run(ctx, req, &respData); err != nil {
 		return nil, err
 	}
 
-	for _, i := range respData.Repository.Issues.Nodes {
+	for _, i := range respData.Repository.PullRequests.Nodes {
 		if (time.Now().Add(-1 * period)).Before(i.CreatedAt) {
 			// 指定のラベルは除外
 			continue
@@ -168,18 +167,18 @@ query Repository($owner: String!, $name: String!) {
 			continue
 		}
 
-		is = append(is, i)
+		prs = append(prs, i)
 	}
 
-	return is, nil
+	return prs, nil
 }
 
-func (c *GitHubConfig) closeIssue(input UpdateIssueInput) error {
+func (c *GitHubConfig) closeIssue(input UpdatePullRequestInput) error {
 	client := graphql.NewClient("https://api.github.com/graphql")
 	req := graphql.NewRequest(`
-mutation UpdateIssue($input: UpdateIssueInput!) {
-  updateIssue(input: $input) {
-    issue {
+mutation UpdateRequestInput($input: UpdatePullRequestInput!) {
+  updatePullRequest(input: $input) {
+    pullRequest {
       id
     }
   }
